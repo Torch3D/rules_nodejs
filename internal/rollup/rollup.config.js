@@ -5,6 +5,9 @@ const rollup = require('rollup');
 const nodeResolve = require('rollup-plugin-node-resolve');
 const sourcemaps = require('rollup-plugin-sourcemaps');
 const commonjs = require('rollup-plugin-commonjs');
+const replace = require('rollup-plugin-replace');
+const postcss = require('rollup-plugin-postcss');
+const json = require('rollup-plugin-json');
 const isBuiltinModule = require('is-builtin-module');
 const path = require('path');
 const fs = require('fs');
@@ -130,6 +133,11 @@ function notResolved(importee, importer) {
   throw new Error(`Could not resolve import '${importee}' from '${importer}'`);
 }
 
+var resolvedNodeModulesPath = fs.realpathSync('TMPL_node_modules_path');
+function relativeModule(module_path) {
+  return path.relative(process.cwd(), `${resolvedNodeModulesPath}/${module_path}`);
+}
+
 module.exports = {
   resolveBazel,
   banner,
@@ -142,15 +150,28 @@ module.exports = {
   output: {
     format: 'TMPL_output_format',
     name: 'TMPL_global_name',
+    strict: false,
   },
   plugins: [TMPL_additional_plugins].concat([
     {resolveId: resolveBazel},
+    replace({
+      'process.env.NODE_ENV': '\'production\''
+    }),
+    commonjs({
+      namedExports: {
+        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement'],
+        [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
+      }
+    }),
+    json(),
+    postcss({
+      modules: true
+    }),
     nodeResolve({
       jsnext: true,
       module: true,
       customResolveOptions: {moduleDirectory: 'TMPL_node_modules_path'}
     }),
-    commonjs(),
     {resolveId: notResolved},
     sourcemaps(),
   ])
