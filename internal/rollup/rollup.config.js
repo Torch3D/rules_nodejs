@@ -157,20 +157,22 @@ module.exports = {
     replace({
       'process.env.NODE_ENV': '\'production\''
     }),
+    json(),
+    postcss({
+      modules: false,
+      extensions: [ '.css' ],
+    }),
     commonjs({
       namedExports: {
         [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement'],
         [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
       }
     }),
-    json(),
-    postcss({
-      modules: true
-    }),
     nodeResolve({
       jsnext: true,
       module: true,
-      customResolveOptions: {moduleDirectory: 'TMPL_node_modules_path'}
+      customResolveOptions: {moduleDirectory: 'TMPL_node_modules_path'},
+      extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.css'],
     }),
     {resolveId: notResolved},
     sourcemaps(),
