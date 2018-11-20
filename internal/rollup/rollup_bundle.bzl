@@ -389,7 +389,7 @@ def _rollup_bundle(ctx):
     # See doc for additional_entry_points for more information.
     # Note: ".cs" is needed on the output folders since ctx.label.name + ".es6" is already
     # a folder that contains the re-rooted es6 sources
-    rollup_config = write_rollup_config(ctx, output_format="cjs", additional_entry_points=ctx.attr.additional_entry_points)
+    rollup_config = write_rollup_config(ctx, plugins=ctx.attr.plugins, output_format="cjs", additional_entry_points=ctx.attr.additional_entry_points)
     code_split_es6_output_dir = ctx.actions.declare_directory(ctx.label.name + ".cs.es6")
     _run_rollup(ctx, collect_es6_sources(ctx), rollup_config, code_split_es6_output_dir)
     code_split_es5_output_dir = ctx.actions.declare_directory(ctx.label.name + ".cs")
@@ -423,12 +423,12 @@ def _rollup_bundle(ctx):
 
   else:
     # Generate the bundles
-    rollup_config = write_rollup_config(ctx)
+    rollup_config = write_rollup_config(ctx, plugins=ctx.attr.plugins)
     run_rollup(ctx, collect_es6_sources(ctx), rollup_config, ctx.outputs.build_es6)
     _run_tsc(ctx, ctx.outputs.build_es6, ctx.outputs.build_es5)
     source_map = run_uglify(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min)
     run_uglify(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min_debug, debug = True)
-    umd_rollup_config = write_rollup_config(ctx, filename = "_%s_umd.rollup.conf.js", output_format = "umd")
+    umd_rollup_config = write_rollup_config(ctx, plugins=ctx.attr.plugins, filename = "_%s_umd.rollup.conf.js", output_format = "umd")
     run_rollup(ctx, collect_es6_sources(ctx), umd_rollup_config, ctx.outputs.build_umd)
     run_sourcemapexplorer(ctx, ctx.outputs.build_es5_min, source_map, ctx.outputs.explore_html)
     files = [ctx.outputs.build_es5_min, source_map]
@@ -571,6 +571,9 @@ ROLLUP_ATTRS = {
         Rollup doc: "The variable name, representing your iife/umd bundle, by which other scripts on the same page can access it."
 
         This is passed to the `output.name` setting in Rollup.""",),
+    "plugins": attr.string_list(
+        default=[]
+    ),
     "_rollup": attr.label(
         executable = True,
         cfg="host",

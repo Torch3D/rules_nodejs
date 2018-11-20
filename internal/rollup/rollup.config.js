@@ -7,6 +7,7 @@ const sourcemaps = require('rollup-plugin-sourcemaps');
 const isBuiltinModule = require('is-builtin-module');
 const path = require('path');
 const fs = require('fs');
+const commonjs = require('rollup-plugin-commonjs');
 
 const DEBUG = false;
 
@@ -151,6 +152,11 @@ function notResolved(importee, importer) {
   }
 }
 
+const resolvedNodeModulesPath = fs.realpathSync('TMPL_node_modules_path');
+function relativeModule(module_path) {
+  return path.relative(process.cwd(), `${resolvedNodeModulesPath}/${module_path}`);
+}
+
 const inputs = [TMPL_inputs];
 const enableCodeSplitting = inputs.length > 1;
 
@@ -165,6 +171,12 @@ const config = {
   },
   plugins: [TMPL_additional_plugins].concat([
     {resolveId: resolveBazel},
+    commonjs({
+      namedExports: {
+        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement'],
+        [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
+      }
+    }),
     nodeResolve(
         {jsnext: true, module: true, customResolveOptions: {moduleDirectory: nodeModulesRoot}}),
     {resolveId: notResolved},
