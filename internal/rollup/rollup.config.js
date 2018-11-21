@@ -164,7 +164,7 @@ module.exports = {
     }),
     commonjs({
       namedExports: {
-        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement'],
+        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
         [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
       }
     }),
