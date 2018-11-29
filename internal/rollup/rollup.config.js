@@ -166,12 +166,16 @@ module.exports = {
       namedExports: {
         [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
         [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
+        [relativeModule('@material-ui/core/styles/index.js')]: ['createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset', 'MuiThemeProvider', 'withStyles', 'withTheme'],
+        [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
       }
     }),
     nodeResolve({
+      browser: true,
       jsnext: true,
-      module: true,
-      customResolveOptions: {moduleDirectory: 'TMPL_node_modules_path'},
+      customResolveOptions: {
+        moduleDirectory: 'TMPL_node_modules_path'
+      },
       extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.css'],
     }),
     {resolveId: notResolved},
