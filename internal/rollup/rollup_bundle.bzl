@@ -155,13 +155,13 @@ def _filter_js_inputs(all_inputs):
 
 def _run_rollup(ctx, sources, config, output, map_output=None):
   args = ctx.actions.args()
-  args.add(["--config", config.path])
+  args.add_all(["--config", config.path])
   if map_output:
-    args.add(["--output.file", output.path])
-    args.add(["--output.sourcemap", "--output.sourcemapFile", map_output.path])
+    args.add_all(["--output.file", output.path])
+    args.add_all(["--output.sourcemap", "--output.sourcemapFile", map_output.path])
   else:
-    args.add(["--output.dir", output.path])
-    args.add(["--output.sourcemap"])
+    args.add_all(["--output.dir", output.path])
+    args.add_all(["--output.sourcemap"])
 
   # We will produce errors as needed. Anything else is spammy: a well-behaved
   # bazel rule prints nothing on success.
@@ -169,24 +169,23 @@ def _run_rollup(ctx, sources, config, output, map_output=None):
 
   if ctx.attr.globals:
     args.add("--external")
-    args.add(ctx.attr.globals.keys(), join_with=",")
+    args.add_joined(ctx.attr.globals.keys(), join_with=",")
     args.add("--globals")
-    args.add(["%s:%s" % g for g in ctx.attr.globals.items()], join_with=",")
+    args.add_joined(["%s:%s" % g for g in ctx.attr.globals.items()], join_with=",")
 
-  inputs = sources + [config]
-
-  inputs += _filter_js_inputs(ctx.files.node_modules)
+  direct_inputs = [config]
+  direct_inputs += _filter_js_inputs(ctx.files.node_modules)
 
   # Also include files from npm fine grained deps as inputs.
   # These deps are identified by the NodeModuleInfo provider.
   for d in ctx.attr.deps:
       if NodeModuleInfo in d:
-          inputs += _filter_js_inputs(d.files)
+          direct_inputs += _filter_js_inputs(d.files.to_list())
 
   if ctx.file.license_banner:
-    inputs += [ctx.file.license_banner]
+    direct_inputs += [ctx.file.license_banner]
   if ctx.version_file:
-    inputs += [ctx.version_file]
+    direct_inputs += [ctx.version_file]
 
   outputs = [output]
   if map_output:
@@ -194,17 +193,17 @@ def _run_rollup(ctx, sources, config, output, map_output=None):
 
   ctx.actions.run(
       executable = ctx.executable._rollup,
-      inputs = inputs,
+      inputs = depset(direct_inputs, transitive = [sources]),
       outputs = outputs,
       arguments = [args]
   )
 
 def _run_tsc(ctx, input, output):
   args = ctx.actions.args()
-  args.add(["--target", "es5"])
+  args.add_all(["--target", "es5"])
   args.add("--allowJS")
   args.add(input.path)
-  args.add(["--outFile", output.path])
+  args.add_all(["--outFile", output.path])
 
   ctx.actions.run(
       executable = ctx.executable._tsc,
@@ -217,9 +216,9 @@ def _run_tsc_on_directory(ctx, input_dir, output_dir):
   config = ctx.actions.declare_file("_%s.code-split.tsconfig.json" % ctx.label.name)
 
   args = ctx.actions.args()
-  args.add(["--project", config.path])
-  args.add(["--input", input_dir.path])
-  args.add(["--output", output_dir.path])
+  args.add_all(["--project", config.path])
+  args.add_all(["--input", input_dir.path])
+  args.add_all(["--output", output_dir.path])
 
   ctx.actions.run(
       executable = ctx.executable._tsc_directory,
@@ -267,11 +266,11 @@ def _run_uglify(ctx, input, output, map_output, debug = False, comments = True, 
       if debug:
         config_name += ".debug"
     config = ctx.actions.declare_file("_%s.uglify.json" % config_name)
-    args.add(["--config-file", config.path])
+    args.add_all(["--config-file", config.path])
     outputs += [map_output, config]
 
   args.add(input.path)
-  args.add(["--output", output.path])
+  args.add_all(["--output", output.path])
 
   # Source mapping options are comma-packed into one argv
   # see https://github.com/mishoo/UglifyJS2#command-line-usage
@@ -280,7 +279,7 @@ def _run_uglify(ctx, input, output, map_output, debug = False, comments = True, 
     source_map_opts.append("content=" + in_source_map.path)
     inputs.append(in_source_map)
   # This option doesn't work in the config file, only on the CLI
-  args.add(["--source-map", ",".join(source_map_opts)])
+  args.add_all(["--source-map", ",".join(source_map_opts)])
 
   if comments:
     args.add("--comments")
@@ -308,7 +307,8 @@ def run_sourcemapexplorer(ctx, js, map, output):
   # TODO(alexeagle): file a feature request on ctx.actions.run so that stdout
   # could be natively redirected to produce the output file
   ctx.actions.run_shell(
-      inputs = [js, map, ctx.executable._source_map_explorer],
+      inputs = [js, map],
+      tools = [ctx.executable._source_map_explorer],
       outputs = [output],
       command = "$1 --html $2 $3 > $4",
       arguments = [
@@ -372,7 +372,7 @@ def _generate_code_split_entry(ctx, bundles_folder, output):
   main_entry_point_dirname = "/".join(ctx.attr.entry_point.split("/")[:-1]) + "/"
   entry_points = {}
   for e in [ctx.attr.entry_point] + ctx.attr.additional_entry_points:
-    entry_point = e.lstrip(main_entry_point_dirname)
+    entry_point = e[len(main_entry_point_dirname):]
     entry_points["./" + entry_point] = bundles_folder + "/" + entry_point.split("/")[-1]
 
   ctx.actions.expand_template(
@@ -593,16 +593,13 @@ ROLLUP_ATTRS = {
         default = Label("@build_bazel_rules_nodejs//internal/rollup:source-map-explorer")),
     "_no_explore_html": attr.label(
         default = Label("@build_bazel_rules_nodejs//internal/rollup:no_explore.html"),
-        allow_files = True,
-        single_file = True),
+        allow_single_file = True),
     "_rollup_config_tmpl": attr.label(
         default = Label("@build_bazel_rules_nodejs//internal/rollup:rollup.config.js"),
-        allow_files = True,
-        single_file = True),
+        allow_single_file = True),
     "_system_config_tmpl": attr.label(
         default = Label("@build_bazel_rules_nodejs//internal/rollup:system.config.js"),
-        allow_files = True,
-        single_file = True),
+        allow_single_file = True),
 }
 
 ROLLUP_OUTPUTS = {

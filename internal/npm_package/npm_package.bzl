@@ -30,13 +30,13 @@ def create_package(ctx, devmode_sources, nested_packages):
   args.use_param_file("%s", use_always = True)
   args.add(package_dir.path)
   args.add(ctx.label.package)
-  args.add([s.path for s in ctx.files.srcs], join_with=",")
+  args.add_joined([s.path for s in ctx.files.srcs], join_with=",", omit_if_empty=False)
   args.add(ctx.bin_dir.path)
   args.add(ctx.genfiles_dir.path)
-  args.add([s.path for s in devmode_sources], join_with=",")
-  args.add([p.path for p in nested_packages], join_with=",")
+  args.add_joined([s.path for s in devmode_sources], join_with=",", omit_if_empty=False)
+  args.add_joined([p.path for p in nested_packages], join_with=",", omit_if_empty=False)
   args.add(ctx.attr.replacements)
-  args.add([ctx.outputs.pack.path, ctx.outputs.publish.path])
+  args.add_all([ctx.outputs.pack.path, ctx.outputs.publish.path])
   args.add(ctx.version_file.path if ctx.version_file else '')
 
   inputs = ctx.files.srcs + devmode_sources + nested_packages + [ctx.file._run_npm_template]
@@ -52,6 +52,14 @@ def create_package(ctx, devmode_sources, nested_packages):
       inputs = inputs,
       outputs = [package_dir, ctx.outputs.pack, ctx.outputs.publish],
       arguments = [args],
+      execution_requirements = {
+          # Never schedule this action remotely because it's not computationally expensive.
+          # It just copies files into a directory; it's not worth copying inputs and outputs to a remote worker.
+          # Also don't run it in a sandbox, because it resolves an absolute path to the bazel-out directory
+          # allowing the .pack and .publish runnables to work with no symlink_prefix
+          # See https://github.com/bazelbuild/rules_nodejs/issues/187
+          "local": "1"
+      },
   )
   return package_dir
 
@@ -77,6 +85,7 @@ def _npm_package(ctx):
 
   return [DefaultInfo(
       files = depset([package_dir]),
+      runfiles = ctx.runfiles([package_dir]),
   )]
 
 NPM_PACKAGE_ATTRS = {

@@ -26,9 +26,8 @@ load("//internal/common:os_name.bzl", "os_name")
 
 COMMON_ATTRIBUTES = dict(dict(), **{
     "package_json": attr.label(
-        allow_files = True,
         mandatory = True,
-        single_file = True,
+        allow_single_file = True,
     ),
     "prod_only": attr.bool(
         default = False,
@@ -54,6 +53,18 @@ COMMON_ATTRIBUTES = dict(dict(), **{
         as well as the fine grained targets such as `@wksp//foo`.""",
         default = [],
     ),
+    "exclude_packages": attr.string_list(
+        doc = """List of packages to exclude from install.
+
+        Use this when you want to install a package during manual yarn or npm
+        install but not install it when Bazel manages dependencies.
+
+        Note: this attribute may be removed in the future if bazel managed npm
+        dependencies are changed to install to the workspace `node_modules` folder
+        instead of `$(bazel info output_base)/external/wksp`.
+        """,
+        default = ["@bazel/bazel"],
+    ),
     "manual_build_file_contents": attr.string(
         doc = """Experimental attribute that can be used to override
         the generated BUILD.bazel file and set its contents manually.
@@ -63,6 +74,10 @@ COMMON_ATTRIBUTES = dict(dict(), **{
         you are running into performance issues due to a large
         node_modules target it is recommended to switch to using
         fine grained npm dependencies."""),
+    "quiet": attr.bool(
+        default = False,
+        doc = "If stdout and stderr should be printed to the terminal.",
+    ),
 })
 
 def _create_build_file(repository_ctx, node):
@@ -75,9 +90,11 @@ def _create_build_file(repository_ctx, node):
 def _add_package_json(repository_ctx):
   repository_ctx.symlink(
       repository_ctx.attr.package_json,
-      repository_ctx.path("package.json"))
+      repository_ctx.path("_package.json"))
 
 def _add_scripts(repository_ctx):
+  repository_ctx.template("process_package_json.js",
+    repository_ctx.path(Label("//internal/npm_install:process_package_json.js")), {})
   repository_ctx.template("generate_build_file.js",
     repository_ctx.path(Label("//internal/npm_install:generate_build_file.js")), {})
 
@@ -120,18 +137,23 @@ cd "{root}" && "{npm}" {npm_args}
     executable = True)
 
   if repository_ctx.attr.package_lock_json:
-    repository_ctx.symlink(
-        repository_ctx.attr.package_lock_json,
-        repository_ctx.path("package-lock.json"))
+    # Copy the file over instead of using a symlink since the lock file
+    # will be modified if there are excluded_packages
+    repository_ctx.template("package-lock.json",
+        repository_ctx.path(repository_ctx.attr.package_lock_json), {})
 
   _add_package_json(repository_ctx)
   _add_data_dependencies(repository_ctx)
   _add_scripts(repository_ctx)
 
-  # To see the output, pass: quiet=False
+  result = repository_ctx.execute([node, "process_package_json.js", ",".join(repository_ctx.attr.exclude_packages)])
+  if result.return_code:
+    fail("node failed: \nSTDOUT:\n%s\nSTDERR:\n%s" % (result.stdout, result.stderr))
+
   result = repository_ctx.execute(
     [repository_ctx.path("npm.cmd" if is_windows else "npm")],
-    timeout = repository_ctx.attr.timeout)
+    timeout = repository_ctx.attr.timeout,
+    quiet = repository_ctx.attr.quiet)
 
   if not repository_ctx.attr.package_lock_json:
     print("\n***********WARNING***********\n%s: npm_install will require a package_lock_json attribute in future versions\n*****************************" % repository_ctx.name)
@@ -155,8 +177,7 @@ cd "{root}" && "{npm}" {npm_args}
 npm_install = repository_rule(
     attrs = dict(COMMON_ATTRIBUTES, **{
         "package_lock_json": attr.label(
-            allow_files = True,
-            single_file = True,
+            allow_single_file = True,
         ),
         "timeout": attr.int(
             default = 600,
@@ -175,37 +196,46 @@ def _yarn_install_impl(repository_ctx):
   yarn = get_yarn_label(repository_ctx)
 
   if repository_ctx.attr.yarn_lock:
-    repository_ctx.symlink(
-        repository_ctx.attr.yarn_lock,
-        repository_ctx.path("yarn.lock"))
+    # Copy the file over instead of using a symlink since the lock file
+    # will be modified if there are excluded_packages
+    repository_ctx.template("yarn.lock",
+        repository_ctx.path(repository_ctx.attr.yarn_lock), {})
 
   _add_package_json(repository_ctx)
   _add_data_dependencies(repository_ctx)
   _add_scripts(repository_ctx)
 
-  # Multiple yarn rules cannot run simultaneously using a shared cache.
-  # See https://github.com/yarnpkg/yarn/issues/683
-  # The --mutex option ensures only one yarn runs at a time, see
-  # https://yarnpkg.com/en/docs/cli#toc-concurrency-and-mutex
-  # The shared cache is not necessarily hermetic, but we need to cache downloaded
-  # artifacts somewhere, so we rely on yarn to be correct.
-  # To see the output, pass: quiet=False
+  result = repository_ctx.execute([node, "process_package_json.js", ",".join(repository_ctx.attr.exclude_packages)])
+  if result.return_code:
+    fail("node failed: \nSTDOUT:\n%s\nSTDERR:\n%s" % (result.stdout, result.stderr))
+
   args = [
     repository_ctx.path(yarn),
-    "--mutex",
-    "network",
     "--cwd",
     repository_ctx.path(""),
+    "--network-timeout",
+    str(repository_ctx.attr.timeout*1000), # in ms
   ]
 
   if repository_ctx.attr.prod_only:
       args.append("--prod")
   if not repository_ctx.attr.use_global_yarn_cache:
       args.extend(["--cache-folder", repository_ctx.path("_yarn_cache")])
+  else:
+      # Multiple yarn rules cannot run simultaneously using a shared cache.
+      # See https://github.com/yarnpkg/yarn/issues/683
+      # The --mutex option ensures only one yarn runs at a time, see
+      # https://yarnpkg.com/en/docs/cli#toc-concurrency-and-mutex
+      # The shared cache is not necessarily hermetic, but we need to cache downloaded
+      # artifacts somewhere, so we rely on yarn to be correct.
+      args.extend(["--mutex", "network"])
 
   # This can take a long time, and the user has no idea what is running.
   # Follow https://github.com/bazelbuild/bazel/issues/1289
-  result = repository_ctx.execute(args, timeout = repository_ctx.attr.timeout)
+  result = repository_ctx.execute(
+    args,
+    timeout = repository_ctx.attr.timeout,
+    quiet = repository_ctx.attr.quiet)
 
   if result.return_code:
     fail("yarn_install failed: %s (%s)" % (result.stdout, result.stderr))
@@ -215,9 +245,8 @@ def _yarn_install_impl(repository_ctx):
 yarn_install = repository_rule(
     attrs = dict(COMMON_ATTRIBUTES, **{
         "yarn_lock": attr.label(
-            allow_files = True,
             mandatory = True,
-            single_file = True,
+            allow_single_file = True,
         ),
         "use_global_yarn_cache": attr.bool(
             default = True,
