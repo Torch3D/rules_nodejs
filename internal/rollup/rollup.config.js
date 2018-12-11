@@ -166,7 +166,6 @@ function relativeModule(module_path) {
 const config = {
   resolveBazel,
   banner,
-  context: 'window',
   onwarn: (warning) => {
     // Always fail on warnings, assuming we don't know which are harmless.
     // We can add exclusions here based on warning.code, if we discover some
@@ -189,7 +188,7 @@ const config = {
         [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
         [relativeModule('@material-ui/core/styles/index.js')]: ['createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset', 'MuiThemeProvider', 'withStyles', 'withTheme'],
         [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
-      }
+      },
     }),
     nodeResolve({
       browser: true,
@@ -220,6 +219,7 @@ else {
   config.output = {
     format: 'TMPL_output_format',
     name: 'TMPL_global_name',
+    strict: false,
   };
 }
 
