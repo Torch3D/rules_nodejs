@@ -4,6 +4,10 @@
 const rollup = require('rollup');
 const nodeResolve = require('rollup-plugin-node-resolve');
 const sourcemaps = require('rollup-plugin-sourcemaps');
+const commonjs = require('rollup-plugin-commonjs');
+const replace = require('rollup-plugin-replace');
+const postcss = require('rollup-plugin-postcss');
+const json = require('rollup-plugin-json');
 const isBuiltinModule = require('is-builtin-module');
 const path = require('path');
 const fs = require('fs');
@@ -147,7 +151,7 @@ function notResolved(importee, importer) {
         `if it has any node_modules dependencies.\n` +
         `See https://github.com/bazelbuild/rules_nodejs/wiki#migrating-to-rules_nodejs-013\n`);
   } else {
-    throw new Error(`Could not resolve import '${importee}' from '${importer}'`);
+  throw new Error(`Could not resolve import '${importee}' from '${importer}'`);
   }
 }
 
@@ -165,8 +169,30 @@ const config = {
   },
   plugins: [TMPL_additional_plugins].concat([
     {resolveId: resolveBazel},
-    nodeResolve(
-        {jsnext: true, module: true, customResolveOptions: {moduleDirectory: nodeModulesRoot}}),
+    replace({
+      'process.env.NODE_ENV': '\'production\''
+    }),
+    json(),
+    postcss({
+      modules: false,
+      extensions: [ '.css' ],
+    }),
+    commonjs({
+      namedExports: {
+        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
+        [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
+        [relativeModule('@material-ui/core/styles/index.js')]: ['createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset', 'MuiThemeProvider', 'withStyles', 'withTheme'],
+        [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
+      }
+    }),
+    nodeResolve({
+      browser: true,
+      jsnext: true,
+      customResolveOptions: {
+        moduleDirectory: nodeModulesRoot
+      },
+      extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.css'],
+    }),
     {resolveId: notResolved},
     sourcemaps(),
   ])
