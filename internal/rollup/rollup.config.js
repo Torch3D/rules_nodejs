@@ -158,6 +158,11 @@ function notResolved(importee, importer) {
 const inputs = [TMPL_inputs];
 const enableCodeSplitting = inputs.length > 1;
 
+var resolvedNodeModulesPath = fs.realpathSync(nodeModulesRoot);
+function relativeModule(module_path) {
+  return path.relative(process.cwd(), `${resolvedNodeModulesPath}/${module_path}`);
+}
+
 const config = {
   resolveBazel,
   banner,
