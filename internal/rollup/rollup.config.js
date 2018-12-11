@@ -166,6 +166,7 @@ function relativeModule(module_path) {
 const config = {
   resolveBazel,
   banner,
+  context: 'window',
   onwarn: (warning) => {
     // Always fail on warnings, assuming we don't know which are harmless.
     // We can add exclusions here based on warning.code, if we discover some
