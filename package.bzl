@@ -17,14 +17,14 @@
 Fulfills similar role as the package.json file.
 """
 
-load("//internal/common:check_version.bzl", "check_version")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("//internal/common:check_version.bzl", "check_version")
 
 # This version is synced with the version in package.json.
 # It will be automatically synced via the npm "version" script
 # that is run when running `npm version` during the release
 # process. See `Releasing` section in README.md.
-VERSION = "0.16.3"
+VERSION = "0.16.8"
 
 def check_rules_nodejs_version(minimum_version_string):
     """
@@ -49,33 +49,11 @@ def check_rules_nodejs_version(minimum_version_string):
         ))
 
 def rules_nodejs_dependencies():
-    """
-    Fetch our transitive dependencies.
-
-    If the user wants to get a different version of these, they can just fetch it
-    from their WORKSPACE before calling this function, or not call this function at all.
-    """
-    _maybe(
-        http_archive,
-        name = "bazel_skylib",
-        url = "https://github.com/bazelbuild/bazel-skylib/archive/0.6.0.zip",
-        strip_prefix = "bazel-skylib-0.6.0",
-        sha256 = "54ee22e5b9f0dd2b42eb8a6c1878dee592cfe8eb33223a7dbbc583a383f6ee1a",
-    )
-
-    # Needed for Remote Build Execution
-    # See https://releases.bazel.build/bazel-toolchains.html
-    # Not strictly a dependency for all users, but it is convenient for them to have this repository
-    # defined to reduce the effort required to on-board to remote execution.
-    http_archive(
-        name = "bazel_toolchains",
-        urls = [
-            "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/bc0091adceaf4642192a8dcfc46e3ae3e4560ea7.tar.gz",
-            "https://github.com/bazelbuild/bazel-toolchains/archive/bc0091adceaf4642192a8dcfc46e3ae3e4560ea7.tar.gz",
-        ],
-        strip_prefix = "bazel-toolchains-bc0091adceaf4642192a8dcfc46e3ae3e4560ea7",
-        sha256 = "7e85a14821536bc24e04610d309002056f278113c6cc82f1059a609361812431",
-    )
+    print("""DEPRECATION WARNING:
+    rules_nodejs_dependencies is no longer needed, and will be removed in a future release.
+    Simply remove any calls to this function and the corresponding call to
+      load("@build_bazel_rules_nodejs//:package.bzl", "rules_nodejs_dependencies")
+    """)
 
 def rules_nodejs_dev_dependencies():
     """
@@ -106,12 +84,12 @@ def rules_nodejs_dev_dependencies():
         sha256 = "282ab93ea7477ad703b3e8108a274c21344c3b59ee4e5b1e6a89cdbe3ecbe68f",
     )
 
-    # Go is a transitive dependency of buildifier
+    # rules_typescript depends on rules_nodejs, so this is cyclical.
+    # We use typescript code to author in this repository, but the typescript dependency isn't exposed to users.
     http_archive(
-        name = "io_bazel_rules_go",
-        strip_prefix = "rules_go-3f51f3f2aa5eabef9844e43a06f91df270ec7779",
-        sha256 = "fa33488b643c0dcc56105b4294d789fa17f791072082c494fd3096d09acc1303",
-        url = "https://github.com/bazelbuild/rules_go/archive/3f51f3f2aa5eabef9844e43a06f91df270ec7779.tar.gz",
+        name = "build_bazel_rules_typescript",
+        url = "https://github.com/bazelbuild/rules_typescript/archive/0.22.1.zip",
+        strip_prefix = "rules_typescript-0.22.1",
     )
 
     # Fetching the Bazel source code allows us to compile the Skylark linter
@@ -120,6 +98,25 @@ def rules_nodejs_dev_dependencies():
         url = "https://github.com/bazelbuild/bazel/archive/0.17.2.zip",
         strip_prefix = "bazel-0.17.2",
         sha256 = "a6d7ae3939e7bb2e410949adab8aa2759eda0b017bf5fc18658dc635552ce56e",
+    )
+
+    # Needed for Remote Build Execution
+    # See https://releases.bazel.build/bazel-toolchains.html
+    http_archive(
+        name = "bazel_toolchains",
+        urls = [
+            "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/bc0091adceaf4642192a8dcfc46e3ae3e4560ea7.tar.gz",
+            "https://github.com/bazelbuild/bazel-toolchains/archive/bc0091adceaf4642192a8dcfc46e3ae3e4560ea7.tar.gz",
+        ],
+        strip_prefix = "bazel-toolchains-bc0091adceaf4642192a8dcfc46e3ae3e4560ea7",
+        sha256 = "7e85a14821536bc24e04610d309002056f278113c6cc82f1059a609361812431",
+    )
+
+    http_archive(
+        name = "bazel_skylib",
+        url = "https://github.com/bazelbuild/bazel-skylib/archive/0.6.0.zip",
+        strip_prefix = "bazel-skylib-0.6.0",
+        sha256 = "54ee22e5b9f0dd2b42eb8a6c1878dee592cfe8eb33223a7dbbc583a383f6ee1a",
     )
 
 def _maybe(repo_rule, name, **kwargs):

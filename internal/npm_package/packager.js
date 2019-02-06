@@ -16,6 +16,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const isBinary = require('isbinaryfile').isBinaryFileSync;
 
 function mkdirp(p) {
   if (!fs.existsSync(p)) {
@@ -24,13 +25,18 @@ function mkdirp(p) {
   }
 }
 
-function write(p, content, replacements) {
-  mkdirp(path.dirname(p));
-  replacements.forEach(r => {
-    const [regexp, newvalue] = r;
-    content = content.replace(regexp, newvalue);
-  });
-  fs.writeFileSync(p, content);
+function copyWithReplace(src, dest, replacements) {
+  mkdirp(path.dirname(dest));
+  if (!isBinary(src)) {
+    let content = fs.readFileSync(src, {encoding: 'utf-8'});
+    replacements.forEach(r => {
+      const [regexp, newvalue] = r;
+      content = content.replace(regexp, newvalue);
+    });
+    fs.writeFileSync(dest, content);
+  } else {
+    fs.copyFileSync(src, dest);
+  }
 }
 
 function unquoteArgs(s) {
@@ -45,7 +51,7 @@ function main(args) {
 
   const replacements = [
     // Strip content between BEGIN-INTERNAL / END-INTERNAL comments
-    [/(#|\/\/)\s+BEGIN-INTERNAL[\w\W]+END-INTERNAL/g, ''],
+    [/(#|\/\/)\s+BEGIN-INTERNAL[\w\W]+?END-INTERNAL/g, ''],
   ];
   let version = '0.0.0';
   if (stampFile) {
@@ -72,9 +78,7 @@ function main(args) {
 
   // src like baseDir/my/path is just copied to outDir/my/path
   for (src of srcsArg.split(',').filter(s => !!s)) {
-    const content = fs.readFileSync(src, {encoding: 'utf-8'});
-    const outPath = path.join(outDir, path.relative(baseDir, src));
-    write(outPath, content, replacements);
+    copyWithReplace(src, path.join(outDir, path.relative(baseDir, src)), replacements);
   }
 
   function outPath(f) {
@@ -96,9 +100,15 @@ function main(args) {
   }
 
   // deps like bazel-bin/baseDir/my/path is copied to outDir/my/path
-  for (dep of depsArg.split(',').filter(s => !!s)) {
-    const content = fs.readFileSync(dep, {encoding: 'utf-8'});
-    write(outPath(dep), content, replacements);
+  // Don't include external directories in the package, these should be installed
+  // by users outside of the package.
+  for (dep of depsArg.split(',').filter(s => !!s && !s.startsWith('external/'))) {
+    try {
+      copyWithReplace(dep, outPath(dep), replacements);
+    } catch (e) {
+      console.error(`Failed to copy ${dep} to ${outPath(dep)}`);
+      throw e;
+    }
   }
 
   // package contents like bazel-bin/baseDir/my/directory/* is
@@ -112,8 +122,7 @@ function main(args) {
           copyRecursive(base, path.join(file, f));
         });
       } else {
-        const content = fs.readFileSync(path.join(base, file), {encoding: 'utf-8'});
-        write(path.join(outDir, file), content, replacements);
+        copyWithReplace(path.join(base, file), path.join(outDir, file), replacements);
       }
     }
     fs.readdirSync(pkg).forEach(f => {

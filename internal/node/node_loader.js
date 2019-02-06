@@ -30,9 +30,12 @@ const DEBUG = false;
 /**
  * The module roots as pairs of a RegExp to match the require path, and a
  * module_root to substitute for the require path.
+ * Ordered by regex length, longest to smallest. 
  * @type {!Array<{module_name: RegExp, module_root: string}>}
  */
-var MODULE_ROOTS = [TEMPLATED_module_roots];
+var MODULE_ROOTS = [
+  TEMPLATED_module_roots
+].sort((a, b) => b.module_name.toString().length - a.module_name.toString().length);
 
 /**
  * Array of bootstrap modules that need to be loaded before the entry point.
@@ -59,22 +62,16 @@ function resolveToModuleRoot(path) {
     throw new Error('resolveToModuleRoot missing path: ' + path);
   }
 
-  var match;
-  var lengthOfMatch = 0;
-  for (var i = 0; i < MODULE_ROOTS.length; i++) {
-    var m = MODULE_ROOTS[i];
-    var p = path.replace(m.module_name, m.module_root);
-    // Longest regex wins when multiple match
-    var len = m.module_name.toString().length;
-    if (p !== path && len > lengthOfMatch) {
-      lengthOfMatch = len;
-      match = p;
-    }
+  // We want all possible matches.
+  const orderedMatches = MODULE_ROOTS.filter(m => m.module_name.test(path));
+
+  if (orderedMatches.length === 0) {
+    return null;
+  } else {
+    // Longest regex wins when multiple match, and the list is already ordered by length.
+    const m = orderedMatches[0];
+    return path.replace(m.module_name, m.module_root);
   }
-  if (match) {
-    return match;
-  }
-  return null;
 }
 
 /**
@@ -237,7 +234,7 @@ function resolveManifestFile(res) {
 }
 
 function resolveManifestDirectory(res) {
-  const pkgfile = runfilesManifest[`${res}/package.json`];
+  const pkgfile = runfilesManifest[path.posix.join(res, 'package.json')];
   if (pkgfile) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgfile, 'UTF-8'));
@@ -260,7 +257,7 @@ function resolveManifestDirectory(res) {
     } catch (e) {
     }
   }
-  return resolveManifestFile(`${res}/index`)
+  return resolveManifestFile(path.posix.join(res, 'index'));
 }
 
 function resolveRunfiles(parent, ...pathSegments) {
@@ -335,6 +332,21 @@ module.constructor._resolveFilename = function(request, parent) {
     console.error(`node_loader: resolve ${request} from ${parentFilename}`);
 
   const failedResolutions = [];
+
+  // Attempt to resolve to module root.
+  // This should be the first attempted resolution because:
+  // - it's fairly cheap to check (regex over a small array); 
+  // - will throw if something is wrong and not cascade down;
+  // - it is be very common when there are a lot of packages built from source;
+  const moduleRoot = resolveToModuleRoot(request);
+  if (moduleRoot) {
+    const moduleRootInRunfiles = resolveRunfiles(undefined, moduleRoot);
+    const filename = module.constructor._findPath(moduleRootInRunfiles, []);
+    if (!filename) {
+      throw new Error(`No file ${request} found in module root ${moduleRoot}`);
+    }
+    return filename;
+  }
 
   // Built-in modules, relative, absolute imports and npm dependencies
   // can be resolved using request
@@ -433,25 +445,9 @@ module.constructor._resolveFilename = function(request, parent) {
     failedResolutions.push(`node_modules attribute (${NODE_MODULES_ROOT}) - ${e.toString()}`);
   }
 
-  // Finally, attempt to resolve to module root
-  const moduleRoot = resolveToModuleRoot(request);
-  if (moduleRoot) {
-    const moduleRootInRunfiles = resolveRunfiles(undefined, moduleRoot);
-    try {
-      const filename = module.constructor._findPath(moduleRootInRunfiles, []);
-      if (!filename) {
-        throw new Error(`No file ${request} found in module root ${moduleRoot}`);
-      }
-      return filename;
-    } catch (e) {
-      console.error(`Failed to findPath for ${moduleRootInRunfiles}`);
-      throw e;
-    }
-  }
-
   const error = new Error(
-      `TEMPLATED_target cannot find module '${request}' required by '${parentFilename}'\n  looked in:` +
-      failedResolutions.map(r => `\n   ${r}\n`));
+      `TEMPLATED_target cannot find module '${request}' required by '${parentFilename}'\n  looked in:\n` +
+      failedResolutions.map(r => `    ${r}`).join('\n') + '\n');
   error.code = 'MODULE_NOT_FOUND';
   throw error;
 }
@@ -460,12 +456,16 @@ module.constructor._resolveFilename = function(request, parent) {
 // source-map-support.
 if (TEMPLATED_install_source_map_support) {
   try {
-    require('source-map-support').install();
-  } catch (e) {
-    console.error(`WARNING: source-map-support module not installed.
-    Stack traces from languages like TypeScript will point to generated .js files.
-    Set install_source_map_support = False in TEMPLATED_target to turn off this warning.
-    `);
+    const sourcemap_support_package = path.resolve(process.cwd(),
+          '../build_bazel_rules_nodejs/third_party/github.com/source-map-support');
+    require(sourcemap_support_package).install();
+  } catch (_) {
+    if (DEBUG) {
+      console.error(`WARNING: source-map-support module not installed.
+      Stack traces from languages like TypeScript will point to generated .js files.
+      Set install_source_map_support = False in TEMPLATED_target to turn off this warning.
+      `);
+    }
   }
 }
 // Load all bootstrap modules before loading the entrypoint.

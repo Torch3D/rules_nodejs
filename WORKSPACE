@@ -13,15 +13,15 @@
 # limitations under the License.
 
 workspace(name = "build_bazel_rules_nodejs")
-load("//:package.bzl", "rules_nodejs_dependencies", "rules_nodejs_dev_dependencies")
 
-rules_nodejs_dependencies()
+load("//:package.bzl", "rules_nodejs_dev_dependencies")
+
 rules_nodejs_dev_dependencies()
 
 load("//internal/common:check_bazel_version.bzl", "check_bazel_version")
 
 # 0.18.0: support for .bazelignore
-check_bazel_version("0.18.0")
+check_bazel_version(minimum_bazel_version = "0.18.0")
 
 #
 # Load and install our dependencies downloaded above.
@@ -37,7 +37,7 @@ local_repository(
     path = "examples/packages",
 )
 
-load("//:defs.bzl", "node_repositories", "yarn_install", "npm_install")
+load("//:defs.bzl", "node_repositories", "npm_install", "yarn_install")
 
 # Install a hermetic version of node.
 # After this is run, these labels will be available:
@@ -69,16 +69,16 @@ packages_example_setup_workspace()
 
 # Dependencies to run skydoc
 load("@io_bazel_rules_sass//sass:sass_repositories.bzl", "sass_repositories")
+
 sass_repositories()
 
 load("@io_bazel_skydoc//skylark:skylark.bzl", "skydoc_repositories")
+
 skydoc_repositories()
 
-# Dependencies to run buildifier and skylint
-load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains")
+load("@build_bazel_rules_typescript//:package.bzl", "rules_typescript_dependencies")
 
-go_rules_dependencies()
-go_register_toolchains()
+rules_typescript_dependencies()
 
 #
 # Install npm dependencies for tests
@@ -86,14 +86,38 @@ go_register_toolchains()
 
 yarn_install(
     name = "fine_grained_deps_yarn",
+    included_files = [
+        "",
+        ".js",
+        ".d.ts",
+        ".json",
+        ".proto",
+    ],
     package_json = "//internal/e2e/fine_grained_deps:package.json",
     yarn_lock = "//internal/e2e/fine_grained_deps:yarn.lock",
-    included_files = ["", ".js", ".d.ts", ".json", ".proto"],
 )
 
 npm_install(
     name = "fine_grained_deps_npm",
+    included_files = [
+        "",
+        ".js",
+        ".d.ts",
+        ".json",
+        ".proto",
+    ],
     package_json = "//internal/e2e/fine_grained_deps:package.json",
     package_lock_json = "//internal/e2e/fine_grained_deps:package-lock.json",
-    included_files = ["", ".js", ".d.ts", ".json", ".proto"],
+)
+
+yarn_install(
+    name = "fine_grained_no_bin",
+    package_json = "//internal/e2e/fine_grained_no_bin:package.json",
+    yarn_lock = "//internal/e2e/fine_grained_no_bin:yarn.lock",
+)
+
+yarn_install(
+    name = "npm",
+    package_json = "//:package.json",
+    yarn_lock = "//:yarn.lock",
 )
