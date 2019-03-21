@@ -179,11 +179,27 @@ const config = {
       extensions: [ '.css' ],
     }),
     commonjs({
+      include: [
+        /\/torchbuf\//,
+        /\/node_modules\//,
+      ],
       namedExports: {
-        [relativeModule('react/index.js')]: ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
+        [relativeModule('react/index.js')]:
+            ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
         [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
-        [relativeModule('@material-ui/core/styles/index.js')]: ['createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset', 'MuiThemeProvider', 'withStyles', 'withTheme'],
+        [relativeModule('@material-ui/core/styles/index.js')]: [
+          'createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset',
+          'MuiThemeProvider', 'withStyles', 'withTheme'
+        ],
         [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
+        [`${process.cwd()}/${rootDir}/torchbuf/assetproc_pb.js`]: [
+          'AssetType', 'AssociatedFile', 'AssociatedFileType', 'BBox3', 'BuildError',
+          'BuildRequest', 'BuildResult', 'BuildStatus', 'BuildType', 'Builder', 'ConvertedAsset',
+          'ImageMetadata', 'ImporterType', 'Matrix4', 'MeshMetadata', 'Quaternion', 'Vector3',
+          'VideoMetadata'
+        ],
+        [`${process.cwd()}/${rootDir}/torchbuf/export_pb.js`]:
+            ['ExportError', 'ExportRequest', 'ExportResult', 'ExportType'],
       },
     }),
     nodeResolve({
