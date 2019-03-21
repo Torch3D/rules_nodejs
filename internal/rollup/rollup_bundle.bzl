@@ -125,6 +125,7 @@ def write_rollup_config(ctx, plugins = [], root_dir = None, filename = "_%s.roll
             "TMPL_stamp_data": "\"%s\"" % ctx.version_file.path if ctx.version_file else "undefined",
             "TMPL_target": str(ctx.label),
             "TMPL_workspace_name": ctx.workspace_name,
+            "TMPL_node_environment": ctx.attr.node_environment if ctx.attr.node_environment else "production",
         },
     )
 
@@ -593,6 +594,10 @@ ROLLUP_ATTRS = {
     "deps": attr.label_list(
         doc = """Other rules that produce JavaScript outputs, such as `ts_library`.""",
         aspects = ROLLUP_DEPS_ASPECTS,
+    ),
+    "node_environment": attr.string(
+        doc = """Sets the NODE_ENV variable for the Rollup bundle.""",
+        default = "production",
     ),
     "_no_explore_html": attr.label(
         default = Label("@build_bazel_rules_nodejs//internal/rollup:no_explore.html"),

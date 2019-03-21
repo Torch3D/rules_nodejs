@@ -172,9 +172,7 @@ const config = {
   },
   plugins: [TMPL_additional_plugins].concat([
     {resolveId: resolveBazel},
-    replace({
-      'process.env.NODE_ENV': '\'production\''
-    }),
+    replace({'process.env.NODE_ENV': '\'TMPL_node_environment\''}),
     json(),
     postcss({
       modules: false,
