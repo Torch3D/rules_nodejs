@@ -64,12 +64,18 @@ function main(params) {
         copy(path.join(f, file));
       }
     } else {
-      const content = fs.readFileSync(f, {encoding: 'utf-8'});
-      write(path.join(outdir, relative(f)), content);
+      const dest = path.join(outdir, relative(f));
+      mkdirp(path.dirname(dest));
+      fs.copyFileSync(f, dest);
     }
   }
 
-  for (const f of params) {
+  // Remove duplicate files (which may come from this rule) from the
+  // list since fs.copyFileSync may fail with `EACCES: permission denied`
+  // as it will not have permission to overwrite duplicate files that were
+  // copied from within bazel-bin.
+  // See https://github.com/bazelbuild/rules_nodejs/pull/546.
+  for (const f of new Set(params)) {
     copy(f);
   }
   return 0;

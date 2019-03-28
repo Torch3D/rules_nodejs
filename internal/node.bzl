@@ -15,6 +15,8 @@
 """Private API surfaced for https://github.com/bazelbuild/rules_typescript backward-compatability
 
 Users should not load files under "/internal"
+
+NOTE: This file is DEPRECATED and will be removed in a future release.
 """
 
 load(

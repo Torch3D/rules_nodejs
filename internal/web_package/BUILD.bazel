@@ -1,3 +1,4 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@build_bazel_rules_nodejs//:defs.bzl", "jasmine_node_test", "nodejs_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -6,6 +7,12 @@ exports_files([
     "web_package.bzl",
     "inject_html.bzl",
 ])
+
+bzl_library(
+    name = "bzl",
+    srcs = glob(["*.bzl"]),
+    visibility = ["//visibility:public"],
+)
 
 filegroup(
     name = "node_modules_none",
@@ -42,7 +49,18 @@ jasmine_node_test(
     name = "assembler_test",
     srcs = ["assembler_spec.js"],
     node_modules = "@build_bazel_rules_nodejs_web_package_deps//:node_modules",
+    tags = [
+        "fix-windows",
+    ],
     deps = [
         "assembler.js",
     ],
+)
+
+filegroup(
+    name = "package_contents",
+    srcs = glob(
+        ["*"],
+        exclude = ["*_spec.js"],
+    ),
 )

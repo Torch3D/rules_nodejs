@@ -21,12 +21,12 @@ See https://docs.bazel.build/versions/master/skylark/repository_rules.html
 load("//internal/common:check_bazel_version.bzl", "check_bazel_version")
 load("//internal/common:os_name.bzl", "os_name")
 load("//internal/npm_install:npm_install.bzl", "yarn_install")
-load("//third_party/github.com/bazelbuild/bazel-skylib/lib:paths.bzl", "paths")
+load("//third_party/github.com/bazelbuild/bazel-skylib:lib/paths.bzl", "paths")
 load(":node_labels.bzl", "get_yarn_node_repositories_label")
 
 # Callers that don't specify a particular version will get these.
 DEFAULT_NODE_VERSION = "10.13.0"
-DEFAULT_YARN_VERSION = "1.12.1"
+DEFAULT_YARN_VERSION = "1.13.0"
 
 # Dictionary mapping NodeJS versions to sets of hosts and their correspoding (filename, strip_prefix, sha256) tuples.
 NODE_REPOSITORIES = {
@@ -67,6 +67,8 @@ NODE_REPOSITORIES = {
 # Dictionary mapping Yarn versions to their correspoding (filename, strip_prefix, sha256) tuples.
 YARN_REPOSITORIES = {
     "1.12.1": ("yarn-v1.12.1.tar.gz", "yarn-v1.12.1", "09bea8f4ec41e9079fa03093d3b2db7ac5c5331852236d63815f8df42b3ba88d"),
+    "1.12.3": ("yarn-v1.12.3.tar.gz", "yarn-v1.12.3", "02cd4b589ec22c4bdbd2bc5ebbfd99c5e99b07242ad68a539cb37896b93a24f2"),
+    "1.13.0": ("yarn-v1.13.0.tar.gz", "yarn-v1.13.0", "125d40ebf621ebb08e3f66a618bd2cc5cd77fa317a312900a1ab4360ed38bf14"),
     "1.3.2": ("yarn-v1.3.2.tar.gz", "yarn-v1.3.2", "6cfe82e530ef0837212f13e45c1565ba53f5199eec2527b85ecbcd88bf26821d"),
     "1.5.1": ("yarn-v1.5.1.tar.gz", "yarn-v1.5.1", "cd31657232cf48d57fdbff55f38bfa058d2fb4950450bd34af72dac796af4de1"),
     "1.6.0": ("yarn-v1.6.0.tar.gz", "yarn-v1.6.0", "a57b2fdb2bfeeb083d45a883bc29af94d5e83a21c25f3fc001c295938e988509"),
@@ -542,7 +544,8 @@ def node_repositories(
     # 0.21.0: repository_ctx.report_progress API
     check_bazel_version("0.21.0")
 
-    _nodejs_repo(
+    _maybe(
+        _nodejs_repo,
         name = "nodejs",
         package_json = package_json,
         node_version = node_version,
@@ -556,12 +559,14 @@ def node_repositories(
         preserve_symlinks = preserve_symlinks,
     )
 
-    _yarn_repo(
+    _maybe(
+        _yarn_repo,
         name = "yarn",
         package_json = package_json,
     )
 
-    yarn_install(
+    _maybe(
+        yarn_install,
         name = "build_bazel_rules_nodejs_npm_install_deps",
         package_json = "@build_bazel_rules_nodejs//internal/npm_install:package.json",
         yarn_lock = "@build_bazel_rules_nodejs//internal/npm_install:yarn.lock",
@@ -569,26 +574,35 @@ def node_repositories(
         prod_only = True,
     )
 
-    yarn_install(
+    _maybe(
+        yarn_install,
         name = "build_bazel_rules_nodejs_rollup_deps",
         package_json = "@build_bazel_rules_nodejs//internal/rollup:package.json",
         yarn_lock = "@build_bazel_rules_nodejs//internal/rollup:yarn.lock",
+        data = ["@build_bazel_rules_nodejs//internal/rollup:postinstall-patches.js"],
     )
 
-    yarn_install(
+    _maybe(
+        yarn_install,
         name = "history-server_runtime_deps",
         package_json = "@build_bazel_rules_nodejs//internal/history-server:package.json",
         yarn_lock = "@build_bazel_rules_nodejs//internal/history-server:yarn.lock",
     )
 
-    yarn_install(
+    _maybe(
+        yarn_install,
         name = "http-server_runtime_deps",
         package_json = "@build_bazel_rules_nodejs//internal/http-server:package.json",
         yarn_lock = "@build_bazel_rules_nodejs//internal/http-server:yarn.lock",
     )
 
-    yarn_install(
+    _maybe(
+        yarn_install,
         name = "build_bazel_rules_nodejs_web_package_deps",
         package_json = "@build_bazel_rules_nodejs//internal/web_package:package.json",
         yarn_lock = "@build_bazel_rules_nodejs//internal/web_package:yarn.lock",
     )
+
+def _maybe(repo_rule, name, **kwargs):
+    if name not in native.existing_rules():
+        repo_rule(name = name, **kwargs)

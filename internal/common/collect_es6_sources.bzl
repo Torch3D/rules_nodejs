@@ -22,10 +22,10 @@ def collect_es6_sources(ctx):
     """Returns a file tree containing only production files.
 
     Args:
-      ctx: ctx.
+        ctx: ctx.
 
     Returns:
-      A file tree containing only production files.
+        A file tree containing only production files.
     """
 
     non_rerooted_files = [d for d in ctx.files.deps if d.is_source]

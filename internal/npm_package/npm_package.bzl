@@ -6,7 +6,7 @@ If all users of your library code use Bazel, they should just add your library
 to the `deps` of one of their targets.
 """
 
-load("//internal:node.bzl", "sources_aspect")
+load("//internal/common:sources_aspect.bzl", "sources_aspect")
 
 # Takes a depset of files and returns a corresponding list of file paths without any files
 # that aren't part of the specified package path.
@@ -52,7 +52,9 @@ def create_package(ctx, deps_sources, nested_packages):
     args.add_joined([p.path for p in nested_packages], join_with = ",", omit_if_empty = False)
     args.add(ctx.attr.replacements)
     args.add_all([ctx.outputs.pack.path, ctx.outputs.publish.path])
+    args.add(ctx.attr.replace_with_version)
     args.add(ctx.version_file.path if ctx.version_file else "")
+    args.add_joined(ctx.attr.vendor_external, join_with = ",")
 
     inputs = ctx.files.srcs + deps_sources + nested_packages + [ctx.file._run_npm_template]
 
@@ -97,6 +99,7 @@ def _npm_package(ctx):
 
         deps_sources = depset(transitive = transitive)
 
+    # Note: to_list() should be called once per rule!
     package_dir = create_package(ctx, deps_sources.to_list(), ctx.files.packages)
 
     return [DefaultInfo(
@@ -113,11 +116,19 @@ NPM_PACKAGE_ATTRS = {
         doc = """Other npm_package rules whose content is copied into this package.""",
         allow_files = True,
     ),
+    "replace_with_version": attr.string(
+        doc = """If set this value is replaced with the version stamp data.
+        See the section on stamping in the README.""",
+        default = "0.0.0-PLACEHOLDER",
+    ),
     "replacements": attr.string_dict(
-        doc = """Key-value pairs which are replaced in all the files while building the package.
-        Note that the special value 0.0.0-PLACEHOLDER is always replaced with the version stamp data.
-        See the section on stamping in the README.
-        """,
+        doc = """Key-value pairs which are replaced in all the files while building the package.""",
+    ),
+    "vendor_external": attr.string_list(
+        doc = """External workspaces whose contents should be vendored into this workspace.
+        Avoids 'external/foo' path segments in the resulting package.
+        Note: only targets in the workspace root can include files from an external workspace.
+        Targets in nested packages only pick up files from within that package.""",
     ),
     "deps": attr.label_list(
         doc = """Other targets which produce files that should be included in the package, such as `rollup_bundle`""",
@@ -144,8 +155,7 @@ npm_package = rule(
     attrs = NPM_PACKAGE_ATTRS,
     outputs = NPM_PACKAGE_OUTPUTS,
 )
-"""
-The npm_package rule creates a directory containing a publishable npm artifact.
+"""The npm_package rule creates a directory containing a publishable npm artifact.
 
 Example:
 
