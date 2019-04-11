@@ -21,6 +21,7 @@ const banner_file = TMPL_banner_file;
 const stamp_data = TMPL_stamp_data;
 const nodeModulesRoot = 'TMPL_node_modules_root';
 const defaultNodeModules = TMPL_default_node_modules;
+const workspaceRoot = path.join(process.cwd(), rootDir);
 
 if (DEBUG)
   console.error(`
@@ -180,37 +181,33 @@ const config = {
       extensions: ['.css'],
     }),
     commonjs({
-      include: [
-        /\/torchbuf\//,
-        /\/node_modules\//,
-      ],
+      include: [/\/node_modules\//, /\/torchbuf\//],
       namedExports: {
-        [relativeModule('react/index.js')]:
+        [relativeModule('react')]:
             ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
-        [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
-        [relativeModule('react-is/index.js')]: [
+        [relativeModule('react-dom')]: ['findDOMNode', 'unstable_batchedUpdates'],
+        [relativeModule('react-is')]: [
           'isValidElementType', 'isConcurrentMode', 'typeOf', 'isContextConsumer',
           'isContextProvider', 'isElement', 'isFragment', 'isPortal', 'isStrictMode'
         ],
-        [relativeModule('@material-ui/core/styles/index.js')]: [
+        [relativeModule('@material-ui/core/styles')]: [
           'createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset',
           'MuiThemeProvider', 'withStyles', 'withTheme'
         ],
-        [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
-        [`${process.cwd()}/${rootDir}/torchbuf/assetproc_pb.js`]: [
+        [relativeModule('@material-ui/core/Modal')]: ['ModalManager', 'Modal'],
+        [path.join(workspaceRoot, 'torchbuf/assetproc_pb.js')]: [
           'AssetType', 'AssociatedFile', 'AssociatedFileType', 'BBox3', 'BuildError',
           'BuildRequest', 'BuildResult', 'BuildStatus', 'BuildType', 'Builder', 'ConvertedAsset',
           'ImageMetadata', 'ImporterType', 'Matrix4', 'MeshMetadata', 'Quaternion', 'Vector3',
           'VideoMetadata'
         ],
-        [`${process.cwd()}/${rootDir}/torchbuf/export_pb.js`]:
+        [path.join(workspaceRoot, 'torchbuf/export_pb.js')]:
             ['ExportError', 'ExportRequest', 'ExportResult', 'ExportType'],
       },
     }),
     nodeResolve({
       browser: true,
-      jsnext: true,
-      customResolveOptions: {moduleDirectory: nodeModulesRoot},
+      customResolveOptions: {moduleDirectory: path.resolve(nodeModulesRoot)},
       extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.css'],
     }),
     {resolveId: notResolved},
