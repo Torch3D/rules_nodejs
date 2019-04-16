@@ -169,9 +169,9 @@ function notResolved(importee, importer) {
 const inputs = [TMPL_inputs];
 const enableCodeSplitting = inputs.length > 1;
 
-var resolvedNodeModulesPath = fs.realpathSync(nodeModulesRoot);
+var resolvedNodeModulesPath = fs.realpathSync(path.join(rootDir, nodeModulesRoot));
 function relativeModule(module_path) {
-  return path.relative(process.cwd(), `${resolvedNodeModulesPath}/${module_path}`);
+  return path.relative(process.cwd(), path.join(resolvedNodeModulesPath, module_path));
 }
 
 const config = {
@@ -204,18 +204,20 @@ const config = {
     commonjs({
       include: [/\/node_modules\//, /\/torchbuf\//],
       namedExports: {
-        [relativeModule('react')]:
-            ['Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef'],
-        [relativeModule('react-dom')]: ['findDOMNode', 'unstable_batchedUpdates'],
-        [relativeModule('react-is')]: [
+        [relativeModule('react/index.js')]: [
+          'Children', 'Component', 'PropTypes', 'PureComponent', 'createElement', 'forwardRef',
+          'createContext'
+        ],
+        [relativeModule('react-dom/index.js')]: ['findDOMNode', 'unstable_batchedUpdates'],
+        [relativeModule('react-is/index.js')]: [
           'isValidElementType', 'isConcurrentMode', 'typeOf', 'isContextConsumer',
           'isContextProvider', 'isElement', 'isFragment', 'isPortal', 'isStrictMode'
         ],
-        [relativeModule('@material-ui/core/styles')]: [
+        [relativeModule('@material-ui/core/styles/index.js')]: [
           'createGenerateClassName', 'createMuiTheme', 'createStyles', 'jssPreset',
           'MuiThemeProvider', 'withStyles', 'withTheme'
         ],
-        [relativeModule('@material-ui/core/Modal')]: ['ModalManager', 'Modal'],
+        [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
         [path.join(workspaceRoot, 'torchbuf/assetproc_pb.js')]: [
           'AssetType', 'AssociatedFile', 'AssociatedFileType', 'BBox3', 'BuildError',
           'BuildRequest', 'BuildResult', 'BuildStatus', 'BuildType', 'Builder', 'ConvertedAsset',
@@ -225,11 +227,6 @@ const config = {
         [path.join(workspaceRoot, 'torchbuf/export_pb.js')]:
             ['ExportError', 'ExportRequest', 'ExportResult', 'ExportType'],
       },
-    }),
-    nodeResolve({
-      browser: true,
-      customResolveOptions: {moduleDirectory: path.resolve(nodeModulesRoot)},
-      extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.css'],
     }),
     {name: 'notResolved', resolveId: notResolved},
     sourcemaps(),
