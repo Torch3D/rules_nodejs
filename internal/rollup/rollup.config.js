@@ -192,8 +192,8 @@ const config = {
     }),
     nodeResolve({
       mainFields: ['es2015', 'module', 'jsnext:main', 'main'],
-      jail: process.cwd(),
-      customResolveOptions: {moduleDirectory: nodeModulesRoot}
+      jail: path.join(process.cwd(), rootDir),
+      customResolveOptions: {moduleDirectory: [nodeModulesRoot, 'node_modules']}
     }),
     amd({
       // Work-around for Angular ngfactory issue https://github.com/angular/angular/issues/29491.
