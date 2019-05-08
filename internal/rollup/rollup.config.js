@@ -218,6 +218,8 @@ const config = {
           'MuiThemeProvider', 'withStyles', 'withTheme'
         ],
         [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
+        [relativeModule('notistack/build/index.js')]:
+            ['SnackbarProvider', 'withSnackbar', 'useSnackbar'],
         [path.join(workspaceRoot, 'torchbuf/assetproc_pb.js')]: [
           'AssetType', 'AssociatedFile', 'AssociatedFileType', 'BBox3', 'BuildError',
           'BuildRequest', 'BuildResult', 'BuildStatus', 'BuildType', 'Builder', 'ConvertedAsset',
