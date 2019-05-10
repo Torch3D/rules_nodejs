@@ -220,6 +220,7 @@ const config = {
         [relativeModule('@material-ui/core/Modal/index.js')]: ['ModalManager', 'Modal'],
         [relativeModule('notistack/build/index.js')]:
             ['SnackbarProvider', 'withSnackbar', 'useSnackbar'],
+        [relativeModule('google-protobuf/google/protobuf/timestamp_pb.js')]: ['Timestamp'],
         [path.join(workspaceRoot, 'torchbuf/assetproc_pb.js')]: [
           'AssetType', 'AssociatedFile', 'AssociatedFileType', 'BBox3', 'BuildError',
           'BuildRequest', 'BuildResult', 'BuildStatus', 'BuildType', 'Builder', 'ConvertedAsset',
