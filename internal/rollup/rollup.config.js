@@ -7,7 +7,7 @@ const amd = require('rollup-plugin-amd');
 const commonjs = require('rollup-plugin-commonjs');
 const replace = require('rollup-plugin-replace');
 const postcss = require('rollup-plugin-postcss');
-const json = require('rollup-plugin-json');
+const rollupJson = require('rollup-plugin-json');
 const isBuiltinModule = require('is-builtin-module');
 const path = require('path');
 const fs = require('fs');
@@ -184,9 +184,7 @@ const config = {
   },
   plugins: [TMPL_additional_plugins].concat([
     {name: 'resolveBazel', resolveId: resolveBazel},
-    replace({'process.env.NODE_ENV': '\'TMPL_node_environment\''}),
-    json(),
-    postcss({
+    replace({'process.env.NODE_ENV': '\'TMPL_node_environment\''}), postcss({
       modules: false,
       extensions: ['.css'],
     }),
@@ -231,8 +229,7 @@ const config = {
             ['ExportError', 'ExportRequest', 'ExportResult', 'ExportType'],
       },
     }),
-    {name: 'notResolved', resolveId: notResolved},
-    sourcemaps(),
+    {name: 'notResolved', resolveId: notResolved}, sourcemaps(), rollupJson({preferConst: true})
   ]),
   output: {
     banner,

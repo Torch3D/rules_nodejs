@@ -171,7 +171,9 @@ def _filter_js_inputs(all_inputs):
     return [
         f
         for f in all_inputs
-        if f.path.endswith(".js") or f.path.endswith(".json")
+        # We also need to include ".map" files as these can be read by
+        # the "rollup-plugin-sourcemaps" plugin.
+        if f.path.endswith(".js") or f.path.endswith(".json") or f.path.endswith(".map")
     ]
 
 def _run_rollup(ctx, sources, config, output, map_output = None):
@@ -214,6 +216,7 @@ def _run_rollup(ctx, sources, config, output, map_output = None):
         outputs += [map_output]
 
     ctx.actions.run(
+        progress_message = "Bundling JavaScript %s [rollup]" % output.short_path,
         executable = ctx.executable._rollup,
         inputs = depset(direct_inputs, transitive = [sources]),
         outputs = outputs,
@@ -222,12 +225,21 @@ def _run_rollup(ctx, sources, config, output, map_output = None):
 
 def _run_tsc(ctx, input, output):
     args = ctx.actions.args()
+
+    # No types needed since we are just downleveling.
+    # `--types` proceeded by another config argument means an empty types array
+    # for the command line parser.
+    # See https://github.com/Microsoft/TypeScript/issues/18581#issuecomment-330700612
+    args.add("--types")
+    args.add("--skipLibCheck")
     args.add_all(["--target", "es5"])
+    args.add_all(["--lib", "es2015,dom"])
     args.add("--allowJS")
     args.add(input.path)
     args.add_all(["--outFile", output.path])
 
     ctx.actions.run(
+        progress_message = "Downleveling JavaScript to ES5 %s [typescript]" % output.short_path,
         executable = ctx.executable._tsc,
         inputs = [input],
         outputs = [output],
@@ -243,6 +255,7 @@ def _run_tsc_on_directory(ctx, input_dir, output_dir):
     args.add_all(["--output", output_dir.path])
 
     ctx.actions.run(
+        progress_message = "Downleveling JavaScript to ES5 %s [typescript]" % output_dir.short_path,
         executable = ctx.executable._tsc_directory,
         inputs = [input_dir],
         outputs = [output_dir, config],
@@ -315,6 +328,7 @@ def _run_terser(ctx, input, output, map_output, debug = False, comments = True, 
         args.add("--beautify")
 
     ctx.actions.run(
+        progress_message = "Optimizing JavaScript %s [terser]" % output.short_path,
         executable = ctx.executable._terser_wrapped,
         inputs = inputs,
         outputs = outputs,
@@ -453,7 +467,10 @@ def _rollup_bundle(ctx):
 
         # There is no UMD/CJS bundle when code-splitting but we still need to satisfy the output
         _generate_code_split_entry(ctx, ctx.label.name + "_chunks", ctx.outputs.build_umd)
+        _generate_code_split_entry(ctx, ctx.label.name + "_chunks", ctx.outputs.build_umd_min)
         _generate_code_split_entry(ctx, ctx.label.name + "_chunks", ctx.outputs.build_cjs)
+        _generate_code_split_entry(ctx, ctx.label.name + "_chunks", ctx.outputs.build_es5_umd)
+        _generate_code_split_entry(ctx, ctx.label.name + "_chunks", ctx.outputs.build_es5_umd_min)
 
         # There is no source map explorer output when code-splitting but we still need to satisfy the output
         ctx.actions.expand_template(
@@ -475,24 +492,55 @@ def _rollup_bundle(ctx):
             code_split_es5_min_output_dir,
             code_split_es5_min_debug_output_dir,
         ]
+        output_group = OutputGroupInfo(
+            es2015 = depset([ctx.outputs.build_es2015, code_split_es2015_output_dir]),
+            es2015_min = depset([ctx.outputs.build_es2015_min, code_split_es2015_min_output_dir]),
+            es2015_min_debug = depset([ctx.outputs.build_es2015_min_debug, code_split_es2015_min_debug_output_dir]),
+            es5 = depset([ctx.outputs.build_es5, code_split_es5_output_dir]),
+            es5_min = depset([ctx.outputs.build_es5_min, code_split_es5_min_output_dir]),
+            es5_min_debug = depset([ctx.outputs.build_es5_min_debug, code_split_es5_min_debug_output_dir]),
+        )
 
     else:
         # Generate the bundles
         rollup_config = write_rollup_config(ctx)
-        run_rollup(ctx, _collect_es2015_sources(ctx), rollup_config, ctx.outputs.build_es2015)
-        run_terser(ctx, ctx.outputs.build_es2015, ctx.outputs.build_es2015_min, config_name = ctx.label.name + "es2015_min")
-        run_terser(ctx, ctx.outputs.build_es2015, ctx.outputs.build_es2015_min_debug, debug = True, config_name = ctx.label.name + "es2015_min_debug")
+        es2015_map = run_rollup(ctx, _collect_es2015_sources(ctx), rollup_config, ctx.outputs.build_es2015)
+        es2015_min_map = run_terser(ctx, ctx.outputs.build_es2015, ctx.outputs.build_es2015_min, config_name = ctx.label.name + "es2015_min", in_source_map = es2015_map)
+        es2015_min_debug_map = run_terser(ctx, ctx.outputs.build_es2015, ctx.outputs.build_es2015_min_debug, debug = True, config_name = ctx.label.name + "es2015_min_debug", in_source_map = es2015_map)
         _run_tsc(ctx, ctx.outputs.build_es2015, ctx.outputs.build_es5)
-        source_map = run_terser(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min)
-        run_terser(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min_debug, debug = True)
-        cjs_rollup_config = write_rollup_config(ctx, filename = "_%s_cjs.rollup.conf.js", output_format = "cjs")
-        run_rollup(ctx, _collect_es2015_sources(ctx), cjs_rollup_config, ctx.outputs.build_cjs)
-        umd_rollup_config = write_rollup_config(ctx, filename = "_%s_umd.rollup.conf.js", output_format = "umd")
-        run_rollup(ctx, _collect_es2015_sources(ctx), umd_rollup_config, ctx.outputs.build_umd)
-        run_sourcemapexplorer(ctx, ctx.outputs.build_es5_min, source_map, ctx.outputs.explore_html)
-        files = [ctx.outputs.build_es5_min, source_map]
+        es5_min_map = run_terser(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min)
+        es5_min_debug_map = run_terser(ctx, ctx.outputs.build_es5, ctx.outputs.build_es5_min_debug, debug = True)
 
-    return DefaultInfo(files = depset(files), runfiles = ctx.runfiles(files))
+        cjs_rollup_config = write_rollup_config(ctx, filename = "_%s_cjs.rollup.conf.js", output_format = "cjs")
+        cjs_map = run_rollup(ctx, _collect_es2015_sources(ctx), cjs_rollup_config, ctx.outputs.build_cjs)
+
+        umd_rollup_config = write_rollup_config(ctx, filename = "_%s_umd.rollup.conf.js", output_format = "umd")
+        umd_map = run_rollup(ctx, _collect_es2015_sources(ctx), umd_rollup_config, ctx.outputs.build_umd)
+        umd_min_map = run_terser(ctx, ctx.outputs.build_umd, ctx.outputs.build_umd_min, config_name = ctx.label.name + "umd_min", in_source_map = umd_map)
+        _run_tsc(ctx, ctx.outputs.build_umd, ctx.outputs.build_es5_umd)
+        es5_umd_min_map = run_terser(ctx, ctx.outputs.build_es5_umd, ctx.outputs.build_es5_umd_min, config_name = ctx.label.name + "es5umd_min")
+
+        run_sourcemapexplorer(ctx, ctx.outputs.build_es5_min, es5_min_map, ctx.outputs.explore_html)
+
+        files = [ctx.outputs.build_es5_min, es5_min_map]
+        output_group = OutputGroupInfo(
+            cjs = depset([ctx.outputs.build_cjs, cjs_map]),
+            es2015 = depset([ctx.outputs.build_es2015, es2015_map]),
+            es2015_min = depset([ctx.outputs.build_es2015_min, es2015_min_map]),
+            es2015_min_debug = depset([ctx.outputs.build_es2015_min_debug, es2015_min_debug_map]),
+            es5 = depset([ctx.outputs.build_es5]),
+            es5_min = depset([ctx.outputs.build_es5_min, es5_min_map]),
+            es5_min_debug = depset([ctx.outputs.build_es5_min_debug, es5_min_debug_map]),
+            es5_umd = depset([ctx.outputs.build_es5_umd]),
+            es5_umd_min = depset([ctx.outputs.build_es5_umd_min, es5_umd_min_map]),
+            umd = depset([ctx.outputs.build_umd, umd_map]),
+            umd_min = depset([ctx.outputs.build_umd_min, umd_min_map]),
+        )
+
+    return [
+        DefaultInfo(files = depset(files), runfiles = ctx.runfiles(files)),
+        output_group,
+    ]
 
 # Expose our list of aspects so derivative rules can override the deps attribute and
 # add their own additional aspects.
@@ -688,7 +736,10 @@ ROLLUP_OUTPUTS = {
     "build_es5": "%{name}.js",
     "build_es5_min": "%{name}.min.js",
     "build_es5_min_debug": "%{name}.min_debug.js",
+    "build_es5_umd": "%{name}.es5umd.js",
+    "build_es5_umd_min": "%{name}.min.es5umd.js",
     "build_umd": "%{name}.umd.js",
+    "build_umd_min": "%{name}.min.umd.js",
     "explore_html": "%{name}.explore.html",
 }
 
@@ -727,3 +778,13 @@ For debugging, note that the `rollup.config.js` and `terser.config.json` files c
 
 An example usage can be found in https://github.com/bazelbuild/rules_nodejs/tree/master/internal/e2e/rollup
 """
+# Adding the above docstring as `doc` attribute
+# causes a build error but ONLY on Ubuntu 14.04 on BazelCI.
+# ```
+# File "internal/npm_package/npm_package.bzl", line 221, in <module>
+#     outputs = NPM_PACKAGE_OUTPUTS,
+# TypeError: rule() got an unexpected keyword argument 'doc'
+# ```
+# This error does not occur on any other platform on BazelCI including Ubuntu 16.04.
+# TOOD(gregmagolan): Figure out why and/or file a bug to Bazel
+# See https://github.com/bazelbuild/buildtools/issues/471#issuecomment-485283200
